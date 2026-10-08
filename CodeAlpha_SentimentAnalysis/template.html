@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sentiment Analysis Explorer — CodeAlpha Task 4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --surface-2:#f0f2f5;
+  --ink:#14142b; --muted:#6b7280; --line:#e3e6ea;
+  --pos:#0f766e; --neg:#e11d48; --accent:#c2410c; --cyan:#0891b2; --indigo:#6366f1;
+  --pos-soft:rgba(15,118,110,.12); --neg-soft:rgba(225,29,72,.12);
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 4px 14px rgba(16,24,40,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1117; --surface:#161b22; --surface-2:#1c222b;
+    --ink:#e9edf3; --muted:#9aa4b2; --line:#2a313c;
+    --pos:#2dd4bf; --neg:#fb7185; --accent:#fb923c; --cyan:#38bdf8; --indigo:#a5b4fc;
+    --pos-soft:rgba(45,212,191,.16); --neg-soft:rgba(251,113,133,.16);
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1117; --surface:#161b22; --surface-2:#1c222b;
+  --ink:#e9edf3; --muted:#9aa4b2; --line:#2a313c;
+  --pos:#2dd4bf; --neg:#fb7185; --accent:#fb923c; --cyan:#38bdf8; --indigo:#a5b4fc;
+  --pos-soft:rgba(45,212,191,.16); --neg-soft:rgba(251,113,133,.16);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+:root{padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0; background:var(--bg); color:var(--ink); font-size:14px; line-height:1.55;
+  font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; -webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px; margin:0 auto; padding:24px 18px 64px}
+h1{font-size:clamp(20px,3.4vw,30px); font-weight:700; margin:0 0 6px; letter-spacing:-.02em}
+.sub{color:var(--muted); max-width:74ch; margin:0}
+.badge{display:inline-block; font-size:11px; font-weight:600; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--accent); margin-bottom:8px}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow)}
+.panel{padding:16px 18px 18px; min-width:0}
+.panel h3{font-size:14.5px; font-weight:600; margin:0 0 2px}
+.panel p.note{font-size:12px; color:var(--muted); margin:0 0 12px}
+section{margin-bottom:18px}
+
+/* ---------- live analyzer ---------- */
+.analyzer{padding:18px}
+.analyzer h2{font-size:16px; margin:0 0 3px}
+.analyzer .note{font-size:12.5px; color:var(--muted); margin:0 0 14px}
+textarea{width:100%; min-height:88px; resize:vertical; padding:12px 14px; font:inherit;
+  background:var(--surface-2); color:var(--ink); border:1px solid var(--line);
+  border-radius:10px; outline:none}
+textarea:focus{border-color:var(--accent)}
+.samples{display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 4px}
+.samples button{background:var(--surface-2); border:1px solid var(--line); color:var(--muted);
+  border-radius:999px; padding:5px 11px; font:inherit; font-size:12px; font-weight:500; cursor:pointer}
+.samples button:hover{border-color:var(--accent); color:var(--accent)}
+.verdicts{display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); margin-top:16px}
+.verdict{border:1px solid var(--line); border-radius:11px; padding:13px 15px; background:var(--surface-2)}
+.verdict .who{font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:700}
+.verdict .call{font-size:20px; font-weight:700; margin-top:4px}
+.verdict .meta{font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums}
+.bar{height:7px; border-radius:99px; background:var(--line); margin-top:9px; overflow:hidden}
+.bar span{display:block; height:100%; border-radius:99px; transition:width .25s}
+.words{margin-top:16px}
+.words .lbl{font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:700; margin-bottom:8px}
+.tok{display:inline-block; padding:4px 9px; margin:0 5px 6px 0; border-radius:7px;
+  font-size:13px; border:1px solid transparent; font-variant-numeric:tabular-nums}
+.tok small{opacity:.65; font-size:10.5px; margin-left:4px; font-family:"JetBrains Mono",monospace}
+.tok.n{background:var(--surface-2); color:var(--muted)}
+
+/* ---------- kpis ---------- */
+.kpis{display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+.kpi{padding:14px 16px}
+.kpi .v{font-size:clamp(20px,2.6vw,27px); font-weight:700; letter-spacing:-.02em; font-variant-numeric:tabular-nums}
+.kpi .l{font-size:11.5px; color:var(--muted); margin-top:2px}
+.kpi .d{font-size:11px; color:var(--accent); font-weight:600; margin-top:3px; min-height:14px}
+
+/* ---------- charts ---------- */
+.grid{display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
+.cbox{position:relative; height:265px}
+.span2{grid-column:1/-1}
+.seg{display:inline-flex; gap:4px; background:var(--surface-2); border:1px solid var(--line);
+  border-radius:9px; padding:3px; margin-bottom:10px}
+.seg button{border:none; background:none; color:var(--muted); font:inherit; font-size:12.5px;
+  font-weight:600; padding:5px 12px; border-radius:6px; cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent); color:#fff}
+
+/* ---------- explorer ---------- */
+.ctrls{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:12px}
+input[type=search]{flex:1 1 220px; padding:9px 12px; font:inherit; background:var(--surface-2);
+  color:var(--ink); border:1px solid var(--line); border-radius:9px; outline:none}
+input[type=search]:focus{border-color:var(--accent)}
+.chips{display:flex; flex-wrap:wrap; gap:6px}
+.chip{border:1px solid var(--line); background:var(--surface-2); color:var(--muted);
+  border-radius:999px; padding:6px 12px; font-size:12.5px; font-weight:600; cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent); border-color:var(--accent); color:#fff}
+.tbl-scroll{overflow-x:auto; border:1px solid var(--line); border-radius:10px}
+table{border-collapse:collapse; width:100%; font-size:12.5px; min-width:620px}
+th{background:var(--surface-2); text-align:left; padding:9px 11px; font-size:11px;
+  letter-spacing:.05em; text-transform:uppercase; color:var(--muted);
+  border-bottom:1px solid var(--line); white-space:nowrap}
+td{padding:9px 11px; border-bottom:1px solid var(--line); vertical-align:top}
+tr:last-child td{border-bottom:none}
+td.tw{min-width:300px; max-width:560px}
+.pill{display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:700}
+.pill.p{background:var(--pos-soft); color:var(--pos)}
+.pill.n{background:var(--neg-soft); color:var(--neg)}
+.num{font-variant-numeric:tabular-nums; white-space:nowrap}
+.pager{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; flex-wrap:wrap}
+.btn{background:var(--surface-2); color:var(--ink); border:1px solid var(--line); border-radius:8px;
+  padding:7px 13px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer}
+.btn:hover:not(:disabled){border-color:var(--accent); color:var(--accent)}
+.btn:disabled{opacity:.45; cursor:default}
+.pager span{font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums}
+.empty{padding:34px; text-align:center; color:var(--muted)}
+.callout{border-left:3px solid var(--accent); padding:12px 16px; background:var(--surface);
+  border-radius:0 10px 10px 0; color:var(--muted); font-size:13px}
+.callout strong{color:var(--ink)}
+footer{margin-top:28px; color:var(--muted); font-size:12px; text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header style="margin-bottom:20px">
+  <div class="badge">CodeAlpha · Task 4 · Sentiment Analysis</div>
+  <h1>Sentiment Analysis Explorer</h1>
+  <p class="sub">Two approaches compared on <strong>10,000 labelled tweets</strong> — a rule-based
+  lexicon and a trained classifier. Type your own text below and watch both of them decide, word by word.</p>
+</header>
+
+<!-- LIVE ANALYZER -->
+<section class="card analyzer">
+  <h2>Analyse any text</h2>
+  <p class="note">Both models run entirely in your browser. Nothing is sent anywhere.</p>
+  <textarea id="input" placeholder="Type or paste a sentence…">The delivery was late and the packaging was damaged, but the support team sorted it out quickly.</textarea>
+  <div class="samples" id="samples"></div>
+
+  <div class="verdicts">
+    <div class="verdict">
+      <div class="who">Trained model · TF-IDF + logistic regression</div>
+      <div class="call" id="mCall">—</div>
+      <div class="meta" id="mMeta"></div>
+      <div class="bar"><span id="mBar"></span></div>
+    </div>
+    <div class="verdict">
+      <div class="who">Lexicon · VADER rules</div>
+      <div class="call" id="vCall">—</div>
+      <div class="meta" id="vMeta"></div>
+      <div class="bar"><span id="vBar"></span></div>
+    </div>
+  </div>
+
+  <div class="words">
+    <div class="lbl">Which words drove the trained model's decision</div>
+    <div id="tokens"></div>
+  </div>
+</section>
+
+<section class="kpis">
+  <div class="card kpi"><div class="v" id="kN">—</div><div class="l">Labelled tweets</div><div class="d">5,000 positive / 5,000 negative</div></div>
+  <div class="card kpi"><div class="v" id="kV">—</div><div class="l">VADER accuracy</div><div class="d">no training required</div></div>
+  <div class="card kpi"><div class="v" id="kM">—</div><div class="l">Trained model accuracy</div><div class="d">on unseen test data</div></div>
+  <div class="card kpi"><div class="v" style="color:var(--accent)" id="kL">—</div><div class="l">Model fed the emoticons</div><div class="d">too good to be true</div></div>
+</section>
+
+<section class="card callout">
+  <strong>Why the highest score is the one to distrust.</strong> These tweets were labelled by the
+  emoticon the author typed — <span class="num">:)</span> meant positive, <span class="num">:(</span>
+  meant negative. Leave those emoticons in the text and the classifier scores almost perfectly, because
+  it is reading the answer key rather than the language. Strip them out and the honest score appears.
+  That gap is the whole finding of this project.
+</section>
+
+<section class="grid">
+  <div class="card panel">
+    <h3>Accuracy by approach</h3>
+    <p class="note">The orange bar is the leaky model.</p>
+    <div class="cbox"><canvas id="cAcc"></canvas></div>
+  </div>
+
+  <div class="card panel">
+    <h3>Full scorecard</h3>
+    <p class="note">Precision, recall and F1 alongside accuracy.</p>
+    <div class="cbox"><canvas id="cMetrics"></canvas></div>
+  </div>
+
+  <div class="card panel">
+    <h3>Where the errors land</h3>
+    <p class="note">Rows are the true label, columns the prediction.</p>
+    <div class="seg" id="cmToggle">
+      <button data-k="model" aria-pressed="true">Trained model</button>
+      <button data-k="vader" aria-pressed="false">VADER</button>
+    </div>
+    <div class="cbox" style="height:222px"><canvas id="cCM"></canvas></div>
+  </div>
+
+  <div class="card panel">
+    <h3>VADER score distribution</h3>
+    <p class="note">Split by the true label. The dashed line is the decision threshold.</p>
+    <div class="cbox"><canvas id="cDist"></canvas></div>
+  </div>
+
+  <div class="card panel span2">
+    <h3>The words the model leans on</h3>
+    <p class="note">The 15 strongest weights in each direction, learned from the training data.</p>
+    <div class="cbox" style="height:330px"><canvas id="cWords"></canvas></div>
+  </div>
+</section>
+
+<!-- EXPLORER -->
+<section class="card panel">
+  <h3>Explore the tweets</h3>
+  <p class="note">Filter to the cases the model got wrong — that is where the interesting failures are.</p>
+  <div class="ctrls">
+    <input type="search" id="q" placeholder="Search the tweet text…">
+    <div class="chips" id="fLabel">
+      <button class="chip" data-v="all" aria-pressed="true">All labels</button>
+      <button class="chip" data-v="1" aria-pressed="false">Positive</button>
+      <button class="chip" data-v="0" aria-pressed="false">Negative</button>
+    </div>
+    <div class="chips" id="fOutcome">
+      <button class="chip" data-v="all" aria-pressed="true">All outcomes</button>
+      <button class="chip" data-v="ok" aria-pressed="false">Model correct</button>
+      <button class="chip" data-v="bad" aria-pressed="false">Model wrong</button>
+    </div>
+  </div>
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr>
+        <th>Tweet</th><th>Actual</th><th class="num">VADER</th>
+        <th class="num">Model</th><th>Verdict</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <div class="pager">
+    <button class="btn" id="prev">← Previous</button>
+    <span id="pageInfo"></span>
+    <button class="btn" id="next">Next →</button>
+  </div>
+</section>
+
+<footer>Built by Rafaih · CodeAlpha Data Analytics Internship · Task 4 — Sentiment Analysis</footer>
+</div>
+
+<script type="application/json" id="d-model">__MODEL__</script>
+<script type="application/json" id="d-lex">__LEXICON__</script>
+<script type="application/json" id="d-res">__RESULTS__</script>
+<script type="application/json" id="d-words">__WORDS__</script>
+<script>
+(function(){
+"use strict";
+
+const MODEL = JSON.parse(document.getElementById("d-model").textContent);
+const LEX   = JSON.parse(document.getElementById("d-lex").textContent);
+const RES   = JSON.parse(document.getElementById("d-res").textContent);
+const WORDS = JSON.parse(document.getElementById("d-words").textContent);
+
+/* ==============================================================
+   1. THE TRAINED MODEL, RE-IMPLEMENTED FOR THE BROWSER
+   Mirrors scikit-learn exactly: sublinear tf, idf weighting,
+   L2 normalisation, then the logistic regression dot product.
+   ============================================================== */
+const TOKEN = /[a-zA-Z0-9_]{2,}/g;
+
+function tokenize(text){
+  return (text.toLowerCase().match(TOKEN) || []);
+}
+
+function scoreModel(text){
+  const toks = tokenize(text);
+  const tf = new Map();
+  for(const t of toks) tf.set(t, (tf.get(t)||0)+1);
+
+  // sublinear tf x idf, restricted to terms the model knows
+  const parts = [];
+  let norm = 0;
+  for(const [term,count] of tf){
+    const e = MODEL.vocab[term];
+    if(!e) continue;
+    const w = (1 + Math.log(count)) * e[0];   // e[0] = idf
+    norm += w*w;
+    parts.push({term, w, coef:e[1], count});
+  }
+  norm = Math.sqrt(norm) || 1;
+
+  let z = MODEL.intercept;
+  for(const p of parts){
+    p.weight = p.w / norm;                    // L2 normalised tf-idf
+    p.contrib = p.weight * p.coef;            // this term's push on the decision
+    z += p.contrib;
+  }
+  const prob = 1 / (1 + Math.exp(-z));
+  parts.sort((a,b)=>Math.abs(b.contrib)-Math.abs(a.contrib));
+  return {prob, parts, known:parts.length, total:toks.length};
+}
+
+/* ==============================================================
+   2. VADER, SIMPLIFIED
+   The real VADER has more rules than this; the core ones -
+   negation, boosters, capitals and exclamation marks - are here.
+   Stored tweet scores come from the full Python implementation.
+   ============================================================== */
+const BOOST_UP = {"absolutely":.293,"completely":.293,"extremely":.293,"really":.293,
+  "so":.293,"totally":.293,"very":.293,"incredibly":.293,"amazingly":.293,"particularly":.293};
+const BOOST_DOWN = {"barely":-.293,"hardly":-.293,"slightly":-.293,"somewhat":-.293,
+  "kind of":-.293,"sort of":-.293,"almost":-.293,"partly":-.293};
+const NEGATE = new Set(["not","no","never","none","nobody","nothing","neither","nowhere",
+  "cannot","cant","can't","won't","wont","don't","dont","isn't","isnt","wasn't","wasnt",
+  "aren't","arent","didn't","didnt","doesn't","doesnt","hasn't","hasnt","without","rarely","seldom"]);
+
+function vaderScore(text){
+  const words = text.split(/\s+/).filter(Boolean);
+  const bare = words.map(w=>w.replace(/^[^\w:;=<]+|[^\w)\](\[dDpP]+$/g,"").toLowerCase());
+  const hits = [];
+  let sum = 0;
+
+  for(let i=0;i<bare.length;i++){
+    const w = bare[i];
+    let v = LEX[w];
+    if(v === undefined) continue;
+
+    // ALL CAPS emphasis
+    if(words[i] === words[i].toUpperCase() && /[A-Z]{2,}/.test(words[i]))
+      v += v > 0 ? .733 : -.733;
+
+    // boosters in the three preceding words
+    for(let d=1; d<=3 && i-d>=0; d++){
+      const prev = bare[i-d];
+      let b = BOOST_UP[prev] !== undefined ? BOOST_UP[prev]
+            : (BOOST_DOWN[prev] !== undefined ? BOOST_DOWN[prev] : 0);
+      if(b){ if(d===2) b*=.95; if(d===3) b*=.9; v += v>0 ? b : -b; }
+      if(NEGATE.has(prev)) v *= -0.74;
+    }
+    sum += v;
+    hits.push({word:words[i], value:v});
+  }
+
+  // exclamation marks add a little intensity
+  const bangs = Math.min((text.match(/!/g)||[]).length, 4);
+  if(bangs) sum += (sum>0?1:-1) * bangs * 0.292;
+
+  const compound = sum / Math.sqrt(sum*sum + 15);   // VADER's normalisation
+  return {compound, hits};
+}
+
+/* ==============================================================
+   3. THEME-AWARE CHART SETUP
+   ============================================================== */
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let C = {};
+function readTheme(){
+  C = {ink:css("--ink"), muted:css("--muted"), line:css("--line"), accent:css("--accent"),
+       pos:css("--pos"), neg:css("--neg"), cyan:css("--cyan"), indigo:css("--indigo"),
+       surface:css("--surface")};
+  Chart.defaults.color = C.muted;
+  Chart.defaults.borderColor = C.line;
+  Chart.defaults.font.family = "Inter, system-ui, sans-serif";
+  Chart.defaults.font.size = 11;
+  Chart.defaults.maintainAspectRatio = false;
+  Chart.defaults.animation.duration = 300;
+}
+const tip = () => ({backgroundColor:C.ink, titleColor:C.surface, bodyColor:C.surface,
+  padding:10, cornerRadius:8, displayColors:false, titleFont:{weight:"600"}});
+const axis = () => ({grid:{color:C.line, drawTicks:false}, border:{display:false}, ticks:{color:C.muted}});
+const noGrid = () => ({grid:{display:false}, border:{display:false}, ticks:{color:C.muted}});
+
+const charts = {};
+function mk(id,cfg){ if(charts[id]) charts[id].destroy(); charts[id]=new Chart(document.getElementById(id),cfg); }
+
+/* ==============================================================
+   4. LIVE ANALYZER UI
+   ============================================================== */
+const SAMPLES = [
+  "Absolutely love this product, it works perfectly and arrived early!",
+  "Worst purchase I have ever made. Broke after two days.",
+  "It's fine I guess. Does the job, nothing special.",
+  "I am NOT happy with the service at all.",
+  "The battery life is not bad, honestly better than I expected."
+];
+
+function verdictColour(p){ return p >= .5 ? C.pos : C.neg; }
+
+function renderAnalyzer(){
+  const text = document.getElementById("input").value.trim();
+  const mEl = {call:document.getElementById("mCall"), meta:document.getElementById("mMeta"), bar:document.getElementById("mBar")};
+  const vEl = {call:document.getElementById("vCall"), meta:document.getElementById("vMeta"), bar:document.getElementById("vBar")};
+  const box = document.getElementById("tokens");
+
+  if(!text){
+    mEl.call.textContent = vEl.call.textContent = "—";
+    mEl.meta.textContent = vEl.meta.textContent = "";
+    mEl.bar.style.width = vEl.bar.style.width = "0%";
+    box.innerHTML = '<span class="tok n">Type something above.</span>';
+    return;
+  }
+
+  // --- trained model ---
+  const m = scoreModel(text);
+  const pct = m.prob*100;
+  mEl.call.textContent = m.prob >= .5 ? "Positive" : "Negative";
+  mEl.call.style.color = verdictColour(m.prob);
+  mEl.meta.textContent = `${pct.toFixed(1)}% positive · ${m.known} of ${m.total} words recognised`;
+  mEl.bar.style.width = Math.max(2, pct).toFixed(1)+"%";
+  mEl.bar.style.background = verdictColour(m.prob);
+
+  // --- VADER ---
+  const v = vaderScore(text);
+  const vpos = (v.compound+1)/2*100;
+  vEl.call.textContent = v.compound > .05 ? "Positive" : (v.compound < -.05 ? "Negative" : "Neutral");
+  vEl.call.style.color = v.compound > .05 ? C.pos : (v.compound < -.05 ? C.neg : C.muted);
+  vEl.meta.textContent = `compound ${v.compound.toFixed(3)} · ${v.hits.length} sentiment word${v.hits.length===1?"":"s"} found`;
+  vEl.bar.style.width = Math.max(2, vpos).toFixed(1)+"%";
+  vEl.bar.style.background = v.compound > .05 ? C.pos : (v.compound < -.05 ? C.neg : C.muted);
+
+  // --- per-word contributions ---
+  if(!m.parts.length){
+    box.innerHTML = '<span class="tok n">None of these words are in the model\'s vocabulary.</span>';
+    return;
+  }
+  const max = Math.abs(m.parts[0].contrib) || 1;
+  box.innerHTML = m.parts.slice(0,18).map(p=>{
+    const t = Math.min(1, Math.abs(p.contrib)/max);
+    const col = p.contrib >= 0 ? "var(--pos)" : "var(--neg)";
+    const bg  = p.contrib >= 0 ? "var(--pos-soft)" : "var(--neg-soft)";
+    return `<span class="tok" style="background:${bg};color:${col};
+      border-color:${col};opacity:${(0.4+t*0.6).toFixed(2)}">${esc(p.term)}
+      <small>${p.contrib>=0?"+":""}${p.contrib.toFixed(2)}</small></span>`;
+  }).join("");
+}
+
+function esc(s){ return s.replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* ==============================================================
+   5. CHARTS
+   ============================================================== */
+function drawCharts(){
+  const names = Object.keys(RES.metrics);
+  const accs = names.map(n=>RES.metrics[n].accuracy*100);
+
+  mk("cAcc",{
+    type:"bar",
+    data:{labels:names.map(n=>n.length>26?n.slice(0,25)+"…":n),
+      datasets:[{data:accs, backgroundColor:names.map(n=>/smiley/i.test(n)?C.accent:C.cyan),
+        borderRadius:6, borderSkipped:false, maxBarThickness:26}]},
+    options:{indexAxis:"y",
+      plugins:{legend:{display:false},tooltip:{...tip(),callbacks:{
+        title:c=>names[c[0].dataIndex], label:c=>c.parsed.x.toFixed(1)+"% accuracy"}}},
+      scales:{x:{...axis(),max:105,ticks:{color:C.muted,callback:v=>v+"%"}}, y:noGrid()}}
+  });
+
+  const keys=["accuracy","precision","recall","f1"];
+  mk("cMetrics",{
+    type:"bar",
+    data:{labels:["Accuracy","Precision","Recall","F1"],
+      datasets:names.map((n,i)=>({label:n, data:keys.map(k=>RES.metrics[n][k]*100),
+        backgroundColor:/smiley/i.test(n)?C.accent:(i===0?C.indigo:C.cyan),
+        borderRadius:5, borderSkipped:false, maxBarThickness:30}))},
+    options:{
+      plugins:{legend:{position:"bottom",labels:{boxWidth:10,boxHeight:10,padding:12,color:C.muted,font:{size:10.5}}},
+        tooltip:{...tip(),displayColors:true,callbacks:{label:c=>c.dataset.label+": "+c.parsed.y.toFixed(1)+"%"}}},
+      scales:{x:noGrid(), y:{...axis(),max:105,ticks:{color:C.muted,callback:v=>v+"%"}}}}
+  });
+
+  drawCM("model");
+
+  // VADER score distribution, computed live from the stored tweets
+  const BINS=32, lo=-1, hi=1, w=(hi-lo)/BINS;
+  const posB=new Array(BINS).fill(0), negB=new Array(BINS).fill(0);
+  for(const t of RES.tweets){
+    let b=Math.floor((t.v-lo)/w); if(b<0)b=0; if(b>=BINS)b=BINS-1;
+    (t.y? posB:negB)[b]++;
+  }
+  const labels=[...Array(BINS)].map((_,b)=>(lo+b*w).toFixed(2));
+  mk("cDist",{
+    type:"bar",
+    data:{labels,datasets:[
+      {label:"actually negative",data:negB,backgroundColor:C.neg+"cc",borderRadius:2,borderSkipped:false},
+      {label:"actually positive",data:posB,backgroundColor:C.pos+"cc",borderRadius:2,borderSkipped:false}]},
+    options:{
+      plugins:{legend:{position:"bottom",labels:{boxWidth:10,boxHeight:10,padding:12,color:C.muted,font:{size:10.5}}},
+        tooltip:{...tip(),displayColors:true,callbacks:{
+          title:c=>"compound "+c[0].label, label:c=>c.dataset.label+": "+c.parsed.y.toLocaleString()}}},
+      scales:{x:{stacked:true,...noGrid(),ticks:{color:C.muted,maxTicksLimit:9}},
+              y:{stacked:true,...axis(),title:{display:true,text:"Tweets",color:C.muted}}}}
+  });
+
+  mk("cWords",{
+    type:"bar",
+    data:{labels:WORDS.map(w=>w[0]),
+      datasets:[{data:WORDS.map(w=>w[1]),
+        backgroundColor:WORDS.map(w=>w[1]<0?C.neg:C.pos),
+        borderRadius:4, borderSkipped:false, maxBarThickness:16}]},
+    options:{indexAxis:"y",
+      plugins:{legend:{display:false},tooltip:{...tip(),callbacks:{label:c=>"weight "+c.parsed.x.toFixed(2)}}},
+      scales:{x:{...axis(),title:{display:true,text:"negative ← model weight → positive",color:C.muted}},
+              y:{...noGrid(),ticks:{color:C.muted,font:{size:10}}}}}
+  });
+}
+
+function drawCM(which){
+  const cm = which==="model" ? RES.model_cm : RES.vader_cm;
+  const total = cm.flat().reduce((a,b)=>a+b,0);
+  const cells = [
+    {x:"predicted negative", y:"actually negative", v:cm[0][0], ok:true},
+    {x:"predicted positive", y:"actually negative", v:cm[0][1], ok:false},
+    {x:"predicted negative", y:"actually positive", v:cm[1][0], ok:false},
+    {x:"predicted positive", y:"actually positive", v:cm[1][1], ok:true}];
+  mk("cCM",{
+    type:"bar",
+    data:{labels:cells.map(c=>c.y.replace("actually ","")+" → "+c.x.replace("predicted ","")),
+      datasets:[{data:cells.map(c=>c.v/total*100),
+        backgroundColor:cells.map(c=>c.ok?C.pos:C.neg),
+        borderRadius:5,borderSkipped:false,maxBarThickness:24}]},
+    options:{indexAxis:"y",
+      plugins:{legend:{display:false},tooltip:{...tip(),callbacks:{
+        label:c=>cells[c.dataIndex].v.toLocaleString()+" tweets ("+c.parsed.x.toFixed(1)+"%)"}}},
+      scales:{x:{...axis(),ticks:{color:C.muted,callback:v=>v+"%"}}, y:{...noGrid(),ticks:{font:{size:10.5}}}}}
+  });
+}
+
+/* ==============================================================
+   6. TWEET EXPLORER
+   ============================================================== */
+const state = {q:"", label:"all", outcome:"all", page:0};
+const PAGE = 12;
+let view = RES.tweets;
+
+function refilter(){
+  const q = state.q.toLowerCase();
+  view = RES.tweets.filter(t=>{
+    if(state.label!=="all" && String(t.y)!==state.label) return false;
+    if(state.outcome!=="all"){
+      const correct = (t.m>=.5?1:0) === t.y;
+      if(state.outcome==="ok" && !correct) return false;
+      if(state.outcome==="bad" && correct) return false;
+    }
+    if(q && !t.t.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  state.page = 0;
+  renderTable();
+}
+
+function renderTable(){
+  const pages = Math.max(1, Math.ceil(view.length/PAGE));
+  if(state.page >= pages) state.page = pages-1;
+  const rows = view.slice(state.page*PAGE, (state.page+1)*PAGE);
+  const tb = document.getElementById("tbody");
+
+  tb.innerHTML = rows.length ? rows.map(t=>{
+    const pred = t.m>=.5?1:0, correct = pred===t.y;
+    return `<tr>
+      <td class="tw">${esc(t.t)}</td>
+      <td><span class="pill ${t.y?"p":"n"}">${t.y?"positive":"negative"}</span></td>
+      <td class="num" style="color:${t.v>=0?"var(--pos)":"var(--neg)"}">${t.v.toFixed(2)}</td>
+      <td class="num" style="color:${pred?"var(--pos)":"var(--neg)"}">${(t.m*100).toFixed(0)}%</td>
+      <td><span class="pill ${correct?"p":"n"}">${correct?"correct":"wrong"}</span></td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="5" class="empty">No tweets match these filters.</td></tr>`;
+
+  document.getElementById("pageInfo").textContent = view.length
+    ? `${(state.page*PAGE+1).toLocaleString()}–${Math.min((state.page+1)*PAGE, view.length).toLocaleString()} of ${view.length.toLocaleString()}`
+    : "0 tweets";
+  document.getElementById("prev").disabled = state.page===0;
+  document.getElementById("next").disabled = state.page>=pages-1;
+}
+
+/* ==============================================================
+   7. INIT
+   ============================================================== */
+function chipGroup(id, key){
+  document.querySelectorAll("#"+id+" .chip").forEach(btn=>{
+    btn.onclick=()=>{
+      document.querySelectorAll("#"+id+" .chip").forEach(b=>b.setAttribute("aria-pressed","false"));
+      btn.setAttribute("aria-pressed","true");
+      state[key] = btn.dataset.v;
+      refilter();
+    };
+  });
+}
+
+function init(){
+  readTheme();
+
+  const names = Object.keys(RES.metrics);
+  document.getElementById("kN").textContent = RES.n.toLocaleString();
+  document.getElementById("kV").textContent = (RES.metrics[names[0]].accuracy*100).toFixed(1)+"%";
+  document.getElementById("kM").textContent = (RES.metrics[names[1]].accuracy*100).toFixed(1)+"%";
+  document.getElementById("kL").textContent = (RES.metrics[names[2]].accuracy*100).toFixed(1)+"%";
+
+  document.getElementById("samples").innerHTML =
+    SAMPLES.map((s,i)=>`<button data-i="${i}">${esc(s.length>42?s.slice(0,40)+"…":s)}</button>`).join("");
+  document.querySelectorAll("#samples button").forEach(b=>{
+    b.onclick=()=>{ document.getElementById("input").value = SAMPLES[+b.dataset.i]; renderAnalyzer(); };
+  });
+
+  let t=null;
+  document.getElementById("input").addEventListener("input",()=>{
+    clearTimeout(t); t=setTimeout(renderAnalyzer,110);
+  });
+
+  document.querySelectorAll("#cmToggle button").forEach(b=>{
+    b.onclick=()=>{
+      document.querySelectorAll("#cmToggle button").forEach(x=>x.setAttribute("aria-pressed","false"));
+      b.setAttribute("aria-pressed","true");
+      drawCM(b.dataset.k);
+    };
+  });
+
+  let qt=null;
+  document.getElementById("q").addEventListener("input",e=>{
+    clearTimeout(qt); qt=setTimeout(()=>{ state.q=e.target.value; refilter(); },160);
+  });
+  chipGroup("fLabel","label");
+  chipGroup("fOutcome","outcome");
+  document.getElementById("prev").onclick=()=>{ if(state.page>0){state.page--; renderTable();} };
+  document.getElementById("next").onclick=()=>{ state.page++; renderTable(); };
+
+  if(window.matchMedia){
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{
+      readTheme(); drawCharts(); renderAnalyzer();
+    });
+  }
+
+  renderAnalyzer();
+  drawCharts();
+  renderTable();
+}
+
+if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",init);
+else init();
+})();
+</script>
+</body>
+</html>
